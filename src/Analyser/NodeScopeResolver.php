@@ -102,6 +102,7 @@ use PHPStan\PhpDoc\ResolvedPhpDocBlock;
 use PHPStan\PhpDoc\StubPhpDocProvider;
 use PHPStan\Reflection\ClassReflection;
 use PHPStan\Reflection\FunctionReflection;
+use PHPStan\Reflection\InitializerExprTypeResolver;
 use PHPStan\Reflection\MethodReflection;
 use PHPStan\Reflection\Native\NativeMethodReflection;
 use PHPStan\Reflection\ParametersAcceptor;
@@ -178,6 +179,7 @@ class NodeScopeResolver
 	 */
 	public function __construct(
 		private ReflectionProvider $reflectionProvider,
+		private InitializerExprTypeResolver $initializerExprTypeResolver,
 		private Reflector $reflector,
 		private ClassReflectionExtensionRegistryProvider $classReflectionExtensionRegistryProvider,
 		private Parser $parser,
@@ -1498,6 +1500,7 @@ class NodeScopeResolver
 
 		return new ClassReflection(
 			$this->reflectionProvider,
+			$this->initializerExprTypeResolver,
 			$this->fileTypeMapper,
 			$this->stubPhpDocProvider,
 			$this->phpDocInheritanceResolver,

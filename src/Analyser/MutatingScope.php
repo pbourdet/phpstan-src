@@ -34,6 +34,7 @@ use PHPStan\Node\ExecutionEndNode;
 use PHPStan\Node\Expr\GetIterableKeyTypeExpr;
 use PHPStan\Node\Expr\GetIterableValueTypeExpr;
 use PHPStan\Node\Expr\GetOffsetValueTypeExpr;
+use PHPStan\Node\Expr\MixedTypeExpr;
 use PHPStan\Node\Expr\OriginalPropertyTypeExpr;
 use PHPStan\Node\Expr\SetOffsetValueTypeExpr;
 use PHPStan\Parser\Parser;
@@ -45,6 +46,8 @@ use PHPStan\Reflection\ClassReflection;
 use PHPStan\Reflection\ConstantReflection;
 use PHPStan\Reflection\Dummy\DummyConstructorReflection;
 use PHPStan\Reflection\FunctionReflection;
+use PHPStan\Reflection\InitializerExprContext;
+use PHPStan\Reflection\InitializerExprTypeResolver;
 use PHPStan\Reflection\MethodReflection;
 use PHPStan\Reflection\Native\NativeParameterReflection;
 use PHPStan\Reflection\ParameterReflection;
@@ -175,6 +178,7 @@ class MutatingScope implements Scope
 	public function __construct(
 		private ScopeFactory $scopeFactory,
 		private ReflectionProvider $reflectionProvider,
+		private InitializerExprTypeResolver $initializerExprTypeResolver,
 		private DynamicReturnTypeExtensionRegistry $dynamicReturnTypeExtensionRegistry,
 		private OperatorTypeSpecifyingExtensionRegistry $operatorTypeSpecifyingExtensionRegistry,
 		private Standard $printer,
@@ -563,6 +567,10 @@ class MutatingScope implements Scope
 				$this->getType($node->getValue()),
 			);
 		}
+		if ($node instanceof MixedTypeExpr) {
+			return new MixedType();
+		}
+
 		if ($node instanceof OriginalPropertyTypeExpr) {
 			$propertyReflection = $this->propertyReflectionFinder->findPropertyReflectionFromNode($node->getPropertyFetch(), $this);
 			if ($propertyReflection === null) {
@@ -1369,9 +1377,9 @@ class MutatingScope implements Scope
 		}
 
 		if ($node instanceof LNumber) {
-			return new ConstantIntegerType($node->value);
+			return $this->initializerExprTypeResolver->getType($node, InitializerExprContext::fromScope($this));
 		} elseif ($node instanceof String_) {
-			return new ConstantStringType($node->value);
+			return $this->initializerExprTypeResolver->getType($node, InitializerExprContext::fromScope($this));
 		} elseif ($node instanceof Node\Scalar\Encapsed) {
 			$parts = [];
 			foreach ($node->parts as $part) {
@@ -1424,7 +1432,7 @@ class MutatingScope implements Scope
 
 			return $constantString;
 		} elseif ($node instanceof DNumber) {
-			return new ConstantFloatType($node->value);
+			return $this->initializerExprTypeResolver->getType($node, InitializerExprContext::fromScope($this));
 		} elseif ($node instanceof Expr\CallLike && $node->isFirstClassCallable()) {
 			if ($node instanceof FuncCall) {
 				if ($node->name instanceof Name) {
@@ -2076,7 +2084,7 @@ class MutatingScope implements Scope
 				) {
 					$constantType = $constantReflection->getValueType();
 				} else {
-					$constantType = ConstantTypeHelper::getTypeFromValue($constantReflection->getValue());
+					$constantType = $this->initializerExprTypeResolver->getType($constantReflection->getValueExpr(), InitializerExprContext::fromScope($this));
 				}
 
 				$constantType = $this->constantResolver->resolveConstantType(
@@ -2770,6 +2778,7 @@ class MutatingScope implements Scope
 		return new self(
 			$this->scopeFactory,
 			$this->reflectionProvider,
+			$this->initializerExprTypeResolver,
 			$this->dynamicReturnTypeExtensionRegistry,
 			$this->operatorTypeSpecifyingExtensionRegistry,
 			$this->printer,
